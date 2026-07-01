@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayGuard - USDC Escrow on Base</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/viem@2/dist/umd/viem.js"></script>
+  <style>
+    body { background: #0a0e17; color: #e0e6ed; font-family: 'Segoe UI', sans-serif; }
+    .navbar { background: #141b2d !important; border-bottom: 1px solid #1e2a45; }
+    .card { background: #141b2d; border: 1px solid #1e2a45; border-radius: 12px; }
+    .card-header { background: transparent; border-bottom: 1px solid #1e2a45; font-weight: 600; }
+    .form-control, .form-select { background: #1a2335; border: 1px solid #2a3a5c; color: #e0e6ed; }
+    .form-control:focus, .form-select:focus { background: #1a2335; border-color: #3b82f6; color: #e0e6ed; box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25); }
+    .btn-primary { background: #3b82f6; border: none; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-success { background: #10b981; border: none; }
+    .btn-success:hover { background: #059669; }
+    .btn-warning { background: #f59e0b; border: none; color: #000; }
+    .btn-warning:hover { background: #d97706; }
+    .btn-danger { background: #ef4444; border: none; }
+    .btn-danger:hover { background: #dc2626; }
+    .table { color: #e0e6ed; }
+    .table thead { background: #1a2335; }
+    .badge { font-size: 0.75rem; }
+    .badge.created { background: #6b7280; }
+    .badge.funded { background: #3b82f6; }
+    .badge.completed { background: #10b981; }
+    .badge.released { background: #059669; }
+    .badge.refunded { background: #ef4444; }
+    .badge.disputed { background: #f59e0b; color: #000; }
+    .actions { min-width: 120px; }
+    #hero { padding: 60px 0 40px; text-align: center; }
+    #hero h1 { font-size: 2.5rem; font-weight: 700; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    #hero p { color: #94a3b8; max-width: 600px; margin: 0 auto; }
+    .footer { text-align: center; padding: 20px; color: #4a5a7a; font-size: 0.85rem; }
+    .footer a { color: #3b82f6; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar navbar-dark px-4 py-2">
+    <span class="navbar-brand fw-bold">PayGuard</span>
+    <span class="text-light" id="account"></span>
+  </nav>
+
+  <div id="hero">
+    <h1>PayGuard</h1>
+    <p>USDC escrow on Base — lock funds, confirm work, release automatically. 2.5% platform fee.</p>
+    <button id="connectBtn" class="btn btn-primary btn-lg mt-3" onclick="connect()">Connect Wallet</button>
+  </div>
+
+  <div id="app" class="container" style="display:none">
+    <div class="row mb-3">
+      <div class="col-auto">
+        <span class="badge bg-secondary p-2" id="usdcBalance">USDC: --</span>
+      </div>
+      <div class="col-auto">
+        <span class="badge bg-info p-2">PayGuard: 0x9f3291...22aa</span>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header">Create Invoice</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <input type="text" id="payee" class="form-control" placeholder="Payee address">
+          </div>
+          <div class="col-md-2">
+            <input type="number" id="amount" class="form-control" placeholder="USDC amount" step="0.01" min="0.01">
+          </div>
+          <div class="col-md-2">
+            <select id="deadline" class="form-select">
+              <option value="1">1 day</option>
+              <option value="3">3 days</option>
+              <option value="7" selected>7 days</option>
+              <option value="14">14 days</option>
+              <option value="30">30 days</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <input type="text" id="desc" class="form-control" placeholder="Description">
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-primary w-100" onclick="createInvoice()">Create</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Invoices</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark table-striped mb-0">
+            <thead>
+              <tr>
+                <th>#</th><th>Payer</th><th>Payee</th><th>Amount</th><th>Deadline</th><th>Description</th><th>Status</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="invoiceList">
+              <tr><td colspan="8" class="text-center text-muted">No invoices yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Built with viem · Base Sepolia · 
+    Builder Code bc_se8lr3yd<br>
+    <a href="https://github.com/demarco2016/payguard" target="_blank">GitHub</a>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
