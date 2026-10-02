@@ -4,3 +4,6 @@ artifacts/
 cache/
 ignition/
 typechain-types/
+frontend/dist/
+.env.*
+!.env.example
