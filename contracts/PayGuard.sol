@@ -31,6 +31,7 @@ contract PayGuard is Ownable, ReentrancyGuard {
 
     uint256 public invoiceCounter;
     mapping(uint256 => Invoice) public invoices;
+    mapping(uint256 => uint256) public invoiceFeeBps;
     mapping(address => uint256[]) public userInvoices;
 
     event InvoiceCreated(uint256 indexed id, address indexed payer, address indexed payee, uint256 amount, uint256 deadline, string description);
@@ -43,12 +44,15 @@ contract PayGuard is Ownable, ReentrancyGuard {
     event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
 
     constructor(address _usdc, address _feeRecipient) Ownable(msg.sender) {
+        require(_usdc != address(0) && _usdc.code.length > 0, "invalid token");
+        require(_feeRecipient != address(0), "invalid fee recipient");
         usdc = IERC20(_usdc);
         feeRecipient = _feeRecipient;
     }
 
     function createInvoice(address _payee, uint256 _amount, uint256 _deadline, string calldata _description) external returns (uint256) {
         require(_payee != address(0), "invalid payee");
+        require(_payee != msg.sender, "payer cannot be payee");
         require(_amount > 0, "zero amount");
         require(_deadline > block.timestamp, "deadline must be future");
 
@@ -65,6 +69,7 @@ contract PayGuard is Ownable, ReentrancyGuard {
             createdAt: block.timestamp
         });
 
+        invoiceFeeBps[id] = platformFee;
         userInvoices[msg.sender].push(id);
         userInvoices[_payee].push(id);
 
@@ -77,6 +82,7 @@ contract PayGuard is Ownable, ReentrancyGuard {
         require(inv.status == InvoiceStatus.Created, "wrong status");
         require(msg.sender == inv.payer, "only payer");
 
+        require(block.timestamp < inv.deadline, "deadline passed");
         inv.status = InvoiceStatus.Funded;
         usdc.safeTransferFrom(msg.sender, address(this), inv.amount);
 
@@ -86,7 +92,7 @@ contract PayGuard is Ownable, ReentrancyGuard {
     function confirmComplete(uint256 _id) external {
         Invoice storage inv = invoices[_id];
         require(inv.status == InvoiceStatus.Funded, "wrong status");
-        require(msg.sender == inv.payee, "only payee");
+        require(msg.sender == inv.payer, "only payer");
 
         inv.status = InvoiceStatus.Completed;
         emit InvoiceCompleted(_id);
@@ -99,7 +105,7 @@ contract PayGuard is Ownable, ReentrancyGuard {
 
         inv.status = InvoiceStatus.Released;
 
-        uint256 fee = (inv.amount * platformFee) / BASIS_POINTS;
+        uint256 fee = (inv.amount * invoiceFeeBps[_id]) / BASIS_POINTS;
         uint256 payAmount = inv.amount - fee;
 
         if (fee > 0) {
@@ -131,14 +137,14 @@ contract PayGuard is Ownable, ReentrancyGuard {
         emit InvoiceDisputed(_id);
     }
 
-    function resolveDispute(uint256 _id, bool releaseToPayee) external onlyOwner {
+    function resolveDispute(uint256 _id, bool releaseToPayee) external onlyOwner nonReentrant {
         Invoice storage inv = invoices[_id];
         require(inv.status == InvoiceStatus.Disputed, "not disputed");
 
         if (releaseToPayee) {
             inv.status = InvoiceStatus.Released;
 
-            uint256 fee = (inv.amount * platformFee) / BASIS_POINTS;
+            uint256 fee = (inv.amount * invoiceFeeBps[_id]) / BASIS_POINTS;
             uint256 payAmount = inv.amount - fee;
 
             if (fee > 0) {

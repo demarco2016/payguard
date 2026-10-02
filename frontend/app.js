@@ -1,4 +1,7 @@
-const PAYGUARD_ADDRESS = "0x9f32910e811f239d2c8cd808901f5a0d786122aa";
+import { createWalletClient, createPublicClient, custom, isAddress } from "viem";
+import { baseSepolia } from "viem/chains";
+import { parseUSDC, formatUSDC, normalizeInvoice } from "./utils.js";
+const PAYGUARD_ADDRESS = window.PAYGUARD_CONFIG?.contractAddress;
 const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 const BASE_SEPOLIA_CHAIN_ID = 84532;
 
@@ -72,6 +75,7 @@ async function switchToBaseSepolia() {
 }
 
 async function connect() {
+  if (!isAddress(PAYGUARD_ADDRESS || "")) return alert("Configure a verified contract address in config.js first.");
   if (!window.ethereum) return alert("Install MetaMask");
   provider = window.ethereum;
 
@@ -79,8 +83,8 @@ async function connect() {
   account = addr;
   chainId = await provider.request({ method: "eth_chainId" });
 
-  walletClient = await createWalletClientFromProvider(provider);
-  publicClient = createPublicClient({ transport: custom(provider) });
+  walletClient = createWalletClient({ chain: baseSepolia, transport: custom(provider) });
+  publicClient = createPublicClient({ chain: baseSepolia, transport: custom(provider) });
 
   if (parseInt(chainId) !== BASE_SEPOLIA_CHAIN_ID) {
     await switchToBaseSepolia();
@@ -91,26 +95,31 @@ async function connect() {
   document.getElementById("app").style.display = "block";
   document.getElementById("account").textContent = `Connected: ${shorten(account)}`;
 
-  loadInvoices();
-  updateBalances();
+  if (!await publicClient.getCode({ address: PAYGUARD_ADDRESS })) throw new Error("No contract at configured address");
+  const token = await publicClient.readContract({ address: PAYGUARD_ADDRESS, abi: PAYGUARD_ABI, functionName: "usdc" });
+  if (token.toLowerCase() !== USDC_ADDRESS.toLowerCase()) throw new Error("Contract token does not match configured USDC");
+  await Promise.all([loadInvoices(), updateBalances()]);
+  provider.on?.("accountsChanged", () => window.location.reload());
+  provider.on?.("chainChanged", () => window.location.reload());
 }
 
 function shorten(a) { return a.slice(0, 6) + "..." + a.slice(-4); }
-function toUSDC(amount) { return BigInt(Math.round(amount * 1e6)); }
-function fromUSDC(amount) { return Number(amount) / 1e6; }
+function toUSDC(amount) { return parseUSDC(amount); }
+function fromUSDC(amount) { return formatUSDC(amount); }
 function tsToDate(ts) { return new Date(Number(ts) * 1000).toLocaleString(); }
 
 async function createInvoice() {
   const payee = document.getElementById("payee").value;
-  const amount = parseFloat(document.getElementById("amount").value);
+  const amount = document.getElementById("amount").value;
   const deadlineDays = parseInt(document.getElementById("deadline").value);
   const desc = document.getElementById("desc").value;
   if (!payee || !amount || !deadlineDays || !desc) return alert("Fill all fields");
 
   const deadline = BigInt(Math.floor(Date.now() / 1000) + deadlineDays * 86400);
-  const amt = toUSDC(amount);
-
   try {
+    if (!isAddress(payee) || payee.toLowerCase() === account.toLowerCase()) throw new Error("Use a valid payee different from payer");
+    const amt = toUSDC(amount);
+    if (amt <= 0n) throw new Error("Amount must be positive");
     const tx = await walletClient.writeContract({
       address: PAYGUARD_ADDRESS,
       abi: PAYGUARD_ABI,
@@ -118,7 +127,7 @@ async function createInvoice() {
       args: [payee, amt, deadline, desc],
       account,
     });
-    await publicClient.waitForTransactionReceipt({ hash: tx });
+    await waitForSuccess(tx);
     alert("Invoice created!");
     loadInvoices();
   } catch (e) { alert(e.message); }
@@ -126,9 +135,9 @@ async function createInvoice() {
 
 async function fundInvoice(id) {
   // First approve USDC
-  const inv = await readInvoice(id);
-  const amount = inv.amount;
   try {
+    const inv = await readInvoice(id);
+    const amount = inv.amount;
     const approveTx = await walletClient.writeContract({
       address: USDC_ADDRESS,
       abi: USDC_ABI,
@@ -136,7 +145,7 @@ async function fundInvoice(id) {
       args: [PAYGUARD_ADDRESS, amount],
       account,
     });
-    await publicClient.waitForTransactionReceipt({ hash: approveTx });
+    await waitForSuccess(approveTx);
 
     const tx = await walletClient.writeContract({
       address: PAYGUARD_ADDRESS,
@@ -145,7 +154,7 @@ async function fundInvoice(id) {
       args: [BigInt(id)],
       account,
     });
-    await publicClient.waitForTransactionReceipt({ hash: tx });
+    await waitForSuccess(tx);
     alert("Invoice funded!");
     loadInvoices();
   } catch (e) { alert(e.message); }
@@ -160,7 +169,7 @@ async function confirmComplete(id) {
       args: [BigInt(id)],
       account,
     });
-    await publicClient.waitForTransactionReceipt({ hash: tx });
+    await waitForSuccess(tx);
     alert("Marked as complete!");
     loadInvoices();
   } catch (e) { alert(e.message); }
@@ -175,7 +184,7 @@ async function release(id) {
       args: [BigInt(id)],
       account,
     });
-    await publicClient.waitForTransactionReceipt({ hash: tx });
+    await waitForSuccess(tx);
     alert("Funds released!");
     loadInvoices();
   } catch (e) { alert(e.message); }
@@ -190,7 +199,7 @@ async function refund(id) {
       args: [BigInt(id)],
       account,
     });
-    await publicClient.waitForTransactionReceipt({ hash: tx });
+    await waitForSuccess(tx);
     alert("Invoice refunded!");
     loadInvoices();
   } catch (e) { alert(e.message); }
@@ -205,19 +214,19 @@ async function disputeInvoice(id) {
       args: [BigInt(id)],
       account,
     });
-    await publicClient.waitForTransactionReceipt({ hash: tx });
+    await waitForSuccess(tx);
     alert("Invoice disputed!");
     loadInvoices();
   } catch (e) { alert(e.message); }
 }
 
 async function readInvoice(id) {
-  return await publicClient.readContract({
+  return normalizeInvoice(await publicClient.readContract({
     address: PAYGUARD_ADDRESS,
     abi: PAYGUARD_ABI,
     functionName: "invoices",
     args: [BigInt(id)],
-  });
+  }));
 }
 
 async function loadInvoices() {
@@ -231,35 +240,33 @@ async function loadInvoices() {
   const tbody = document.getElementById("invoiceList");
   tbody.innerHTML = "";
 
-  for (const rawId of ids) {
-    const id = Number(rawId);
+  for (const rawId of new Set(ids)) {
+    const id = String(rawId);
     const inv = await readInvoice(id);
-    const status = STATUS_NAMES[Number(inv.status)];
-
+    const status = STATUS_NAMES[Number(inv.status)] || "Unknown";
     const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${id}</td>
-      <td>${shorten(inv.payer)}</td>
-      <td>${shorten(inv.payee)}</td>
-      <td>${fromUSDC(inv.amount).toFixed(2)} USDC</td>
-      <td>${tsToDate(inv.deadline)}</td>
-      <td>${inv.description}</td>
-      <td><span class="badge ${status.toLowerCase()}">${status}</span></td>
-      <td class="actions">
-        ${status === "Created" && inv.payer.toLowerCase() === account.toLowerCase()
-          ? `<button onclick="fundInvoice(${id})" class="btn btn-sm btn-primary">Fund</button>` : ""}
-        ${status === "Funded" && inv.payee.toLowerCase() === account.toLowerCase()
-          ? `<button onclick="confirmComplete(${id})" class="btn btn-sm btn-success">Complete</button>` : ""}
-        ${status === "Completed" && inv.payee.toLowerCase() === account.toLowerCase()
-          ? `<button onclick="release(${id})" class="btn btn-sm btn-success">Release</button>` : ""}
-        ${(status === "Funded" && inv.payer.toLowerCase() === account.toLowerCase())
-          ? `<button onclick="disputeInvoice(${id})" class="btn btn-sm btn-warning">Dispute</button>` : ""}
-        ${(status === "Funded" && Number(inv.deadline) * 1000 < Date.now())
-          ? `<button onclick="refund(${id})" class="btn btn-sm btn-danger">Refund</button>` : ""}
-        ${status === "Created" && inv.payer.toLowerCase() === account.toLowerCase()
-          ? `<span class="text-muted small">Fund to activate</span>` : ""}
-      </td>
-    `;
+    for (const text of [id, shorten(inv.payer), shorten(inv.payee), `${fromUSDC(inv.amount)} USDC`, tsToDate(inv.deadline), inv.description, status]) {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      row.appendChild(cell);
+    }
+    const actions = document.createElement("td");
+    const payer = inv.payer.toLowerCase() === account.toLowerCase();
+    const payee = inv.payee.toLowerCase() === account.toLowerCase();
+    const expired = BigInt(Math.floor(Date.now() / 1000)) >= inv.deadline;
+    function button(label, handler) {
+      const el = document.createElement("button");
+      el.className = "btn btn-sm btn-primary me-1";
+      el.textContent = label;
+      el.addEventListener("click", () => handler(id));
+      actions.appendChild(el);
+    }
+    if (status === "Created" && payer && !expired) button("Fund", fundInvoice);
+    if (status === "Funded" && payer) button("Accept work", confirmComplete);
+    if (status === "Completed" && payee) button("Release", release);
+    if (["Funded", "Completed"].includes(status) && payer) button("Dispute", disputeInvoice);
+    if (status === "Funded" && payer && expired) button("Refund", refund);
+    row.appendChild(actions);
     tbody.appendChild(row);
   }
 }
@@ -272,5 +279,12 @@ async function updateBalances() {
     args: [account],
   });
   document.getElementById("usdcBalance").textContent =
-    `USDC: ${fromUSDC(usdcBal).toFixed(2)}`;
+    `USDC: ${fromUSDC(usdcBal)}`;
 }
+
+async function waitForSuccess(hash) {
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") throw new Error("Transaction reverted");
+  return receipt;
+}
+Object.assign(window, { connect: () => connect().catch(error => alert(error.message)), createInvoice });

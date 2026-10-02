@@ -36,7 +36,10 @@ function loadArtifact() {
 }
 
 async function main() {
+  if (!process.argv.includes("--deploy")) throw new Error("Deployment sends a transaction. Review configuration and explicitly pass --deploy.");
   const networkName = process.env.NETWORK || "baseSepolia";
+  if (networkName !== "baseSepolia") throw new Error("This experimental deployment script only supports Base Sepolia.");
+  if (!/^0x[0-9a-fA-F]{64}$/.test(PRIVATE_KEY || "")) throw new Error("Set a valid PRIVATE_KEY in your local environment.");
   const chain = CHAINS[networkName];
   if (!chain) { console.error("Unknown network"); process.exit(1); }
 
@@ -48,6 +51,7 @@ async function main() {
   const publicClient = createPublicClient({ transport: http(chain.rpc) });
   const walletClient = createWalletClient({ account, transport: http(chain.rpc) });
 
+  if (await publicClient.getChainId() !== chain.id) throw new Error("RPC chain mismatch");
   const balance = await publicClient.getBalance({ address: account.address });
   console.log(`ETH balance: ${balance.toString()}`);
   if (balance === 0n) { console.error("Zero balance"); process.exit(1); }
@@ -62,6 +66,7 @@ async function main() {
   });
 
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success" || !receipt.contractAddress) throw new Error("Deployment reverted");
   console.log(`\n✅ PayGuard deployed: ${receipt.contractAddress}`);
   console.log(`Explorer: https://${networkName === "base" ? "" : "sepolia."}basescan.org/address/${receipt.contractAddress}`);
 
@@ -78,4 +83,4 @@ async function main() {
   console.log(JSON.stringify(info, null, 2));
 }
 
-main().catch(console.error);
+main().catch((error) => { console.error(error.message); process.exitCode = 1; });

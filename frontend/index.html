@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PayGuard - USDC Escrow on Base</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://unpkg.com/viem@2/dist/umd/viem.js"></script>
   <style>
     body { background: #0a0e17; color: #e0e6ed; font-family: 'Segoe UI', sans-serif; }
     .navbar { background: #141b2d !important; border-bottom: 1px solid #1e2a45; }
@@ -57,7 +56,7 @@
         <span class="badge bg-secondary p-2" id="usdcBalance">USDC: --</span>
       </div>
       <div class="col-auto">
-        <span class="badge bg-info p-2">PayGuard: 0x9f3291...22aa</span>
+        <span class="badge bg-info p-2">PayGuard: configure reviewed contract address</span>
       </div>
     </div>
 
@@ -111,10 +110,11 @@
 
   <div class="footer">
     Built with viem · Base Sepolia · 
-    Builder Code bc_se8lr3yd<br>
+    Experimental escrow; verify deployment before use<br>
     <a href="https://github.com/demarco2016/payguard" target="_blank">GitHub</a>
   </div>
 
-  <script src="app.js"></script>
+  <script src="config.js"></script>
+  <script src="dist/app.js"></script>
 </body>
 </html>

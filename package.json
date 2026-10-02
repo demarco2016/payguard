@@ -1,21 +1,30 @@
 {
   "name": "payguard",
   "version": "1.0.0",
-  "description": "",
+  "description": "Experimental USDC invoice escrow with payer acceptance",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "node scripts/compile.js",
+    "test": "npm run compile && node --test",
+    "frontend:build": "esbuild frontend/app.js --bundle --format=iife --outfile=frontend/dist/app.js",
+    "check": "node --check frontend/app.js && node --check scripts/interact.js && node --check scripts/deploy.js"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "devDependencies": {
     "@openzeppelin/contracts": "^5.6.1",
     "dotenv": "^17.4.2",
+    "esbuild": "^0.28.2",
+    "ethers": "^6.17.0",
+    "hardhat": "^3.18.1",
     "viem": "^2.54.1"
   },
   "dependencies": {
     "solc": "^0.8.20"
+  },
+  "overrides": {
+    "tmp": "^0.2.7"
   }
 }
