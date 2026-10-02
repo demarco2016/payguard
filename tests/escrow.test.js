@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import ganache from 'ganache';
+import { network } from 'hardhat';
 import { BrowserProvider, ContractFactory } from 'ethers';
 import solc from 'solc';
 import { readFileSync } from 'node:fs';
@@ -17,8 +17,9 @@ const mockSource = `pragma solidity ^0.8.20; contract MockToken {
 const out = JSON.parse(solc.compile(JSON.stringify({language:'Solidity',sources:{'Mock.sol':{content:mockSource}},settings:{evmVersion:'shanghai',outputSelection:{'*':{'*':['abi','evm.bytecode']}}}})));
 const mock = out.contracts['Mock.sol'].MockToken;
 async function fixture(t) {
- const rpc = ganache.provider({logging:{quiet:true},chain:{hardfork:'shanghai'},wallet:{totalAccounts:4}});
- t.after(()=>rpc.disconnect());
+ const connection = await network.create('local');
+ const rpc = connection.provider;
+ t.after(()=>connection.close());
  const provider = new BrowserProvider(rpc); provider.pollingInterval=10;
  const [owner,payer,payee,other] = await Promise.all([0,1,2,3].map(i=>provider.getSigner(i)));
  const token=await new ContractFactory(mock.abi,mock.evm.bytecode.object,owner).deploy();await token.waitForDeployment();

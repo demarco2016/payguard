@@ -18,10 +18,13 @@
     "dotenv": "^17.4.2",
     "esbuild": "^0.28.2",
     "ethers": "^6.17.0",
-    "ganache": "^7.9.2",
+    "hardhat": "^3.18.1",
     "viem": "^2.54.1"
   },
   "dependencies": {
     "solc": "^0.8.20"
+  },
+  "overrides": {
+    "tmp": "^0.2.7"
   }
 }

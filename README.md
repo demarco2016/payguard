@@ -4,7 +4,7 @@ Experimental USDC invoice escrow for Base Sepolia. The payer funds an invoice an
 
 ## Local setup and checks
 
-Requires Node.js 22+.
+Requires Node.js 22.13+.
 
 ```sh
 npm ci
@@ -13,7 +13,7 @@ npm run check
 npm run frontend:build
 ```
 
-Tests compile Solidity and execute escrow flows on an in-memory Ganache chain using generated accounts and a mock ERC-20 token. No external RPC, real wallet, or real funds are required. Tests cover payer acceptance, unauthorized actions, fee snapshots, deadlines, refunds, disputes, and exact decimal parsing. They are regression checks, not a security audit.
+Tests compile Solidity and execute escrow flows on an in-memory Hardhat chain using generated accounts and a mock ERC-20 token. No external RPC, real wallet, or real funds are required. Tests cover payer acceptance, unauthorized actions, fee snapshots, deadlines, refunds, disputes, and exact decimal parsing. They are regression checks, not a security audit.
 
 ## Configuration and inspection
 
